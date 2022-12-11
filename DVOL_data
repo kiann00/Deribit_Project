@@ -1,0 +1,83 @@
+# this python code block just downloads some DVOL data and perp-spot-price for historical analysis
+
+import scipy as sc
+import numpy as np
+import pandas as pd
+import scipy.stats as stats
+import math
+import datetime
+from datetime import datetime
+from scipy import optimize
+from scipy.optimize import minimize
+import time
+import json
+from dateutil import parser
+from dateutil.parser import parse
+import matplotlib.pyplot as plt
+import websocket
+from websocket import create_connection
+
+# this block to try to get some historical bitcoin volatility data and price estimates
+# resolution are in seconds,so arguments are 1, 60, 3600, 43200, 1D
+import asyncio
+import websockets
+import json
+
+# the Deribit timestamp somehow takes python timestamp and multiplies by 1,000
+end_ = int(datetime(2022, 12, 11, 0, 0).timestamp() *1000)
+start_ = int(datetime(2018, 12, 11, 0, 0).timestamp() *1000)
+ccy_ = 'BTC-PERPETUAL'
+print('start:', start_, 'end:', end_, 'currency:', ccy_)
+
+msg_vol = \
+{
+  "jsonrpc" : "2.0",
+  "id" : 833,
+  "method" : "public/get_volatility_index_data",
+  "params" : {
+    "currency" : "BTC",
+    "start_timestamp" : start_,
+    "end_timestamp" : end_,
+    "resolution" : "1D"
+  }
+}
+
+msg_ccy = \
+{
+  "jsonrpc" : "2.0",
+  "id" : 833,
+  "method" : "public/get_tradingview_chart_data",
+  "params" : {
+    "instrument_name" : ccy_,
+    "start_timestamp" : start_,
+    "end_timestamp" : end_,
+    "resolution" : "1D"
+  }
+}
+
+
+from websocket import create_connection
+ws = create_connection("wss://www.deribit.com/ws/api/v2/")
+# ws = create_connection("wss://test.deribit.com/ws/api/v2/")
+
+ws.send(json.dumps(msg_vol))
+response = ws.recv()
+
+res_ = pd.DataFrame(json.loads(response)['result']['data'], columns = ['timestamp', 'open', 'high', 'low', 'close'])
+res_.timestamp = res_.timestamp.apply(lambda x: datetime.fromtimestamp(x/1000))
+res_.columns = ['timestamp', 'open_vol', 'high_vol', 'low_vol', 'close_vol']
+display(res_.head(5))
+
+ws.send(json.dumps(msg_ccy))
+response = ws.recv()
+
+res_ccy = pd.DataFrame(json.loads(response)['result'])
+res_ccy.ticks = res_ccy.ticks.apply(lambda x: datetime.fromtimestamp(x/1000))
+res_ccy.columns = ['volume', 'timestamp', 'status', 'open_px', 'low_px', 'high_px', 'cost_px', 'close_px']
+display(res_ccy.head(5))
+
+
+# ..estimation of SABR beta parameter, recall at the condition K= F, ATMF, the SABR formula simplfies to
+# ATM-vol = alpha * (function) / (F^(1-beta))
+# then, shifting the formula, we get ln-ATM_vol = ln-alpha - (1-beta) * lnF
+
